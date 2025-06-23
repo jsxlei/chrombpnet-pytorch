@@ -2,8 +2,11 @@
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
+[tool.hatch.build.targets.wheel]
+packages = ["chrombpnet"]
+
 [project]
-name = "chrombpnet"
+name = "chrombpnet_pytorch"
 version = "0.0.1"
 description = "ChromBPNet pytorch"
 readme = "README.md"
@@ -11,6 +14,7 @@ requires-python = ">=3.7"
 license = {file = "LICENSE"}
 authors = [
     {name = "Lei Xiong"},
+    {email = "jsxlei@gmail.com"}
 ]
 maintainers = [
     {name = "Lei Xiong", email = "jsxlei@gmail.com"},
