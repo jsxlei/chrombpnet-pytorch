@@ -40,11 +40,11 @@ class DataConfig:
             rc: float = 0.5,
             outlier_threshold: float = 0.999,
             data_type: str = 'profile',
-            training_chroms: List = [
-                "chr2", "chr4", "chr5", "chr7", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14",
-                "chr15", "chr16", "chr17", "chr18", "chr19", "chr21", "chr22", "chrX", "chrY"],
-            validation_chroms: List = ['chr8', 'chr20'],
-            test_chroms: List = ["chr1", "chr3", "chr6"],
+            # training_chroms: List = [
+            #     "chr2", "chr4", "chr5", "chr7", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14",
+            #     "chr15", "chr16", "chr17", "chr18", "chr19", "chr21", "chr22", "chrX", "chrY"],
+            # validation_chroms: List = ['chr8', 'chr20'],
+            # test_chroms: List = ["chr1", "chr3", "chr6"],
             exclude_chroms: list = [],
             fold: int = 0,
             genome: str = 'hg38',
@@ -71,9 +71,9 @@ class DataConfig:
             self.rc = rc
             self.outlier_threshold = outlier_threshold
             self.data_type = data_type
-            self.training_chroms = training_chroms
-            self.validation_chroms = validation_chroms
-            self.test_chroms = test_chroms
+                # self.training_chroms = training_chroms
+                # self.validation_chroms = validation_chroms
+                # self.test_chroms = test_chroms
             self.exclude_chroms = exclude_chroms
             self.fold = fold
             self.batch_size = batch_size    
@@ -83,9 +83,9 @@ class DataConfig:
 
             fold_file_path = _datasets.fetch(f'fold_{fold}.json', progressbar=False)
             splits_dict = json.load(open(fold_file_path))
-            self.training_chroms = splits_dict['train'] if training_chroms is None else training_chroms
-            self.validation_chroms = splits_dict['valid'] if validation_chroms is None else validation_chroms
-            self.test_chroms = splits_dict['test'] if test_chroms is None else test_chroms
+            self.training_chroms = splits_dict['train'] #if training_chroms is None else training_chroms
+            self.validation_chroms = splits_dict['valid'] #if validation_chroms is None else validation_chroms
+            self.test_chroms = splits_dict['test'] #if test_chroms is None else test_chroms
 
     
     def __post_init__(self):

@@ -142,7 +142,7 @@ def load_model(args):
         else:
             args.checkpoint = checkpoint
             print(f'Loading checkpoint from {checkpoint}')
-    model = load_pretrained_model(args)
+    model = load_pretrained_model(args.checkpoint)
     return model
 
 def compare_predictions(out_dir, chrom):
