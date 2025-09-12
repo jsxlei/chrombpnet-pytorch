@@ -643,7 +643,7 @@ def load_pretrained_model(args):
     checkpoint = args.checkpoint
     if checkpoint is not None:
         if checkpoint.endswith('.ckpt'):
-            model_wrapper = ChromBPNetWrapper.load_from_checkpoint(checkpoint)
+            model_wrapper = ChromBPNetWrapper.load_from_checkpoint(checkpoint, map_location='cpu')
             return model_wrapper
                 
         elif checkpoint.endswith('.pt'):
