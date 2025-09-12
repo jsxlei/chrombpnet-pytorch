@@ -639,7 +639,8 @@ def create_model_wrapper(
         raise ValueError(f"Unknown model type: {model_type}") 
 
 
-def load_pretrained_model(checkpoint):
+def load_pretrained_model(args):
+    checkpoint = args.checkpoint
     if checkpoint is not None:
         if checkpoint.endswith('.ckpt'):
             model_wrapper = ChromBPNetWrapper.load_from_checkpoint(checkpoint)
