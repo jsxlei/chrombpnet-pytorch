@@ -87,6 +87,22 @@ class ChromBPNet(nn.Module):
 		
         self.n_control_tracks = config.n_control_tracks
 
+        self.tf_style_reinit()
+
+    def tf_style_reinit(self):
+        """
+        Re-initializes model weights for Linear and Conv1d layers using
+        TensorFlow's default: Xavier/Glorot uniform for weights, zeros for bias.
+        Operates in-place!
+        """
+        # print("Reinitializing with TF strategy")
+        for m in self.model.modules():
+            if isinstance(m, nn.Conv1d) or isinstance(m, nn.Linear):
+                if hasattr(m, 'weight') and m.weight is not None:
+                    nn.init.xavier_uniform_(m.weight)
+                if hasattr(m, 'bias') and m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
     def forward(self, x, **kwargs):
         """A forward pass through the network.
 
