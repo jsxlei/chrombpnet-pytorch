@@ -640,21 +640,37 @@ def create_model_wrapper(
 
 
 def load_pretrained_model(args):
+    import os
     checkpoint = args.checkpoint
+    if args.bias_scaled is None and os.path.exists(os.path.join(args.data_dir, 'bias_scaled.h5')):
+        args.bias_scaled = os.path.join(args.data_dir, 'bias_scaled.h5')
     if checkpoint is not None:
         if checkpoint.endswith('.ckpt'):
             model_wrapper = ChromBPNetWrapper.load_from_checkpoint(checkpoint, map_location='cpu')
+            if args.bias_scaled:
+                model_wrapper.model.bias = model_wrapper.init_bias(args.bias_scaled)
+            else:
+                print(f"No bias model found")
             return model_wrapper
                 
         elif checkpoint.endswith('.pt'):
             model_wrapper = ChromBPNetWrapper(args)
             model_wrapper.model.model.load_state_dict(torch.load(checkpoint, map_location='cpu'))
+            if args.bias_scaled:
+                model_wrapper.model.bias = model_wrapper.init_bias(args.bias_scaled)
+            else:
+                print(f"No bias model found")
             return model_wrapper
         elif checkpoint.endswith('.h5'):  
             model_wrapper = ChromBPNetWrapper(args)
             # For Keras H5 files, load using the from_keras method
             print(f"Loading chrombpnet_wo_bias model from {checkpoint}")
             model_wrapper.model.model = BPNet.from_keras(checkpoint)
+            if args.bias_scaled:
+                print(f"Loading bias model from {args.bias_scaled}")
+                model_wrapper.model.bias = model_wrapper.init_bias(args.bias_scaled)
+            else:
+                print(f"No bias model found")
             return model_wrapper
     else:
         model_wrapper = ChromBPNetWrapper(args)
