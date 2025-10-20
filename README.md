@@ -1,3 +1,7 @@
+[![Stars](https://img.shields.io/github/stars/jsxlei/chrombpnet-pytorch?logo=GitHub&color=yellow)](https://github.com/jsxlei/chrombpnet-pytorch/stargazers)
+[![PyPI](https://img.shields.io/pypi/v/chrombpnet-pytorch.svg)](https://pypi.org/project/chrombpnet-pytorch)
+<!-- [![Documentation Status](https://readthedocs.org/projects/chrombpnet-pytorch/badge/?version=latest)](https://chrombpnet-pytorch.readthedocs.io/en/latest/?badge=stable) -->
+[![Downloads](https://pepy.tech/badge/chrombpnet-pytorch)](https://pepy.tech/project/chrombpnet-pytorch)
 # ChromBPNet Pytorch
 
 - Pytorch implementation for [ChromBPNet](https://github.com/kundajelab/chrombpnet)
