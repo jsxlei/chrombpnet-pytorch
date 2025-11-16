@@ -209,17 +209,18 @@ def compare_with_observed(regions, parsed_output, out_dir='./', tag='all_regions
         nonpeak_index = nonpeak_regions.index
         nonpeak_regions = nonpeak_regions.reset_index(drop=True)
         print('nonpeak_regions', nonpeak_regions.head())
+        if nonpeak_regions.shape[0]>0:
 
-        spearman_cor, pearson_cor, mse = counts_metrics(nonpeak_regions['true_count'], nonpeak_regions['pred_count'], os.path.join(out_dir, 'nonpeaks'))
-        metrics_dictionary["counts_metrics"]["nonpeaks"] = {}
-        metrics_dictionary["counts_metrics"]["nonpeaks"]["spearmanr"] = spearman_cor
-        metrics_dictionary["counts_metrics"]["nonpeaks"]["pearsonr"] = pearson_cor
-        metrics_dictionary["counts_metrics"]["nonpeaks"]["mse"] = mse
-        mnll_pw, mnll_norm, jsd_pw, jsd_norm, jsd_rnd, jsd_rnd_norm, mnll_rnd, mnll_rnd_norm = profile_metrics(parsed_output['true_profile'][nonpeak_index], softmax(parsed_output['pred_profile'])[nonpeak_index])
-        plot_histogram(jsd_pw, jsd_rnd, os.path.join(out_dir, 'nonpeaks_jsd'), '')
-        metrics_dictionary["profile_metrics"]["nonpeaks"] = {}
-        metrics_dictionary["profile_metrics"]["nonpeaks"]["median_jsd"] = np.nanmedian(jsd_pw)        
-        metrics_dictionary["profile_metrics"]["nonpeaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm)
+            spearman_cor, pearson_cor, mse = counts_metrics(nonpeak_regions['true_count'], nonpeak_regions['pred_count'], os.path.join(out_dir, 'nonpeaks'))
+            metrics_dictionary["counts_metrics"]["nonpeaks"] = {}
+            metrics_dictionary["counts_metrics"]["nonpeaks"]["spearmanr"] = spearman_cor
+            metrics_dictionary["counts_metrics"]["nonpeaks"]["pearsonr"] = pearson_cor
+            metrics_dictionary["counts_metrics"]["nonpeaks"]["mse"] = mse
+            mnll_pw, mnll_norm, jsd_pw, jsd_norm, jsd_rnd, jsd_rnd_norm, mnll_rnd, mnll_rnd_norm = profile_metrics(parsed_output['true_profile'][nonpeak_index], softmax(parsed_output['pred_profile'])[nonpeak_index])
+            plot_histogram(jsd_pw, jsd_rnd, os.path.join(out_dir, 'nonpeaks_jsd'), '')
+            metrics_dictionary["profile_metrics"]["nonpeaks"] = {}
+            metrics_dictionary["profile_metrics"]["nonpeaks"]["median_jsd"] = np.nanmedian(jsd_pw)        
+            metrics_dictionary["profile_metrics"]["nonpeaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm)
 
     print(json.dumps(metrics_dictionary, indent=4, default=lambda o: float(o)))
 
