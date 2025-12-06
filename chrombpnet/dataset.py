@@ -463,7 +463,7 @@ class ChromBPNetDataset(torch.utils.data.Dataset):
                         nonpeak_cts = hf['nonpeak_cts'][:]
                         nonpeak_coords = hf['nonpeak_coords'][:]
                         nonpeak_regions = pd.read_csv(os.path.join(cached_dir, 'nonpeak_regions.csv'))
-                
+                print(f'Loaded cached data {cached_dir}')
                 data_loaded = True
             except Exception as e:
                 data_loaded = False

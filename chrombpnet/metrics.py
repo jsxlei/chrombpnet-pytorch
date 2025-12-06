@@ -127,11 +127,10 @@ def load_output_to_regions(output, regions, out_dir='./'):
     regions = regions.reset_index(drop=True).copy()
     os.makedirs(out_dir, exist_ok=True)
     parsed_output = {key: np.concatenate([batch[key] for batch in output]) for key in output[0]}
-    if 'is_peak' in regions.columns:
-        regions['is_peak'] = regions['is_peak'].astype(int)
     regions['pred_count'] = parsed_output['pred_count']
     regions['true_count'] = parsed_output['true_count']
     regions.to_csv(os.path.join(out_dir, 'regions.csv'), sep='\t', index=False)
+
     regions[regions['is_peak']].to_csv(os.path.join(out_dir, 'regions_peak.csv'), sep='\t', index=False)
     regions[~regions['is_peak']].to_csv(os.path.join(out_dir, 'regions_nonpeak.csv'), sep='\t', index=False)
     return regions, parsed_output

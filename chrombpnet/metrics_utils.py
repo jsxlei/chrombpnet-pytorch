@@ -189,7 +189,7 @@ def mnll_min_max_bounds(profile):
     return (min_mnll, max_mnll)
 
 #https://github.com/kundajelab/basepairmodels/blob/cf8e346e9df1bad9e55bd459041976b41207e6e5/basepairmodels/cli/fastpredict.py#L131
-def jsd_min_max_bounds(profile):
+def jsd_min_max_bounds(profile, eps=1e-8):
     """
         Min Max bounds for the jsd metric
         
@@ -204,7 +204,7 @@ def jsd_min_max_bounds(profile):
     uniform_profile = np.ones(len(profile)) * (1.0 / len(profile))
 
     # profile as probabilities
-    profile_prob = profile / np.sum(profile)
+    profile_prob = profile / (np.sum(profile) + 1e-8)
 
     # jsd of profile with uniform profile
     max_jsd = jensenshannon(profile_prob, uniform_profile)

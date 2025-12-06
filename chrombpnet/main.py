@@ -286,6 +286,7 @@ def predict(args, model_wrapper, datamodule=None, mode='predict'):
     out_dir = os.path.join(args.out_dir, args.name, f'fold_{args.fold}')
     if datamodule is None:
         data_config = DataConfig.from_argparse_args(args)
+        data_config.batch_size = 1000
         datamodule = DataModule(data_config)
 
     if args.bias_scaled is None:
