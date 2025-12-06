@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 
-from .bpnet import BPNet
+from chrombpnet.bpnet import BPNet
 
 
 class _Exp(nn.Module):
@@ -67,7 +67,7 @@ class ChromBPNet(nn.Module):
         ):
         super().__init__()
 
-        self.model = BPNet(        
+        self.chrombpnet_wo_bias = BPNet(        
             out_dim=config.out_dim,
             n_filters=config.n_filters, 
             n_layers=config.n_layers, 
@@ -96,7 +96,7 @@ class ChromBPNet(nn.Module):
         Operates in-place!
         """
         # print("Reinitializing with TF strategy")
-        for m in self.model.modules():
+        for m in self.chrombpnet_wo_bias.modules():
             if isinstance(m, nn.Conv1d) or isinstance(m, nn.Linear):
                 if hasattr(m, 'weight') and m.weight is not None:
                     nn.init.xavier_uniform_(m.weight)
@@ -126,7 +126,7 @@ class ChromBPNet(nn.Module):
             The predicted logit profile for each example. Note that this is not
             a normalized value.
         """
-        acc_profile, acc_counts = self.model(x)
+        acc_profile, acc_counts = self.chrombpnet_wo_bias(x)
         bias_profile, bias_counts = self.bias(x)
 
         y_profile = acc_profile + bias_profile

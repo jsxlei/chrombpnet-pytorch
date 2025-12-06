@@ -1,6 +1,7 @@
 # Author: Lei Xiong <jsxlei@gmail.com>
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 # adapted from BPNet in bpnet-lite, credit goes to Jacob Schreiber <jmschreiber91@gmail.com>
@@ -149,7 +150,22 @@ class BPNet(torch.nn.Module):
         self.global_avg_pool = torch.nn.AdaptiveAvgPool1d(1)
         self.linear = torch.nn.Linear(n_filters+n_count_control, 1, 
             bias=count_output_bias)
+        
+        self.tf_style_reinit()
 
+    def tf_style_reinit(self):
+        """
+        Re-initializes model weights for Linear and Conv1d layers using
+        TensorFlow's default: Xavier/Glorot uniform for weights, zeros for bias.
+        Operates in-place!
+        """
+        # print("Reinitializing with TF strategy")
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d) or isinstance(m, nn.Linear):
+                if hasattr(m, 'weight') and m.weight is not None:
+                    nn.init.xavier_uniform_(m.weight)
+                if hasattr(m, 'bias') and m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
     def forward(self, x, x_ctl=None):
         """A forward pass of the model.

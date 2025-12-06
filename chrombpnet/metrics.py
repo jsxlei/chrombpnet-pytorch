@@ -132,43 +132,14 @@ def load_output_to_regions(output, regions, out_dir='./'):
     regions['pred_count'] = parsed_output['pred_count']
     regions['true_count'] = parsed_output['true_count']
     regions.to_csv(os.path.join(out_dir, 'regions.csv'), sep='\t', index=False)
+    regions[regions['is_peak']].to_csv(os.path.join(out_dir, 'regions_peak.csv'), sep='\t', index=False)
+    regions[~regions['is_peak']].to_csv(os.path.join(out_dir, 'regions_nonpeak.csv'), sep='\t', index=False)
     return regions, parsed_output
 
 def compare_with_observed(regions, parsed_output, out_dir='./', tag='all_regions'):
     """
     """
     os.makedirs(out_dir, exist_ok=True)
-    # chrom_sizes = os.path.expanduser('~/.cache/regnet/hg38.chrom.sizes')
-    # gs = bigwig_helper.read_chrom_sizes(chrom_sizes) #list(chrom_sizes.items())
-
-    # #gs = bigwig_helper.read_chrom_sizes(chrom_sizes)
-    # seqlen = 1000
-    # regions_array = [[x[0], int(x[1])+int(x[9])-seqlen//2, int(x[1])+int(x[9])+seqlen//2, int(x[1])+int(x[9])] for x in np.array(regions.values)]
-    
-    # # parse output
-    # parsed_output = {key: np.concatenate([batch[key] for batch in output]) for key in output[0]}
-
-    # data = softmax(parsed_output['pred_profile']) * (np.expand_dims(np.exp(parsed_output['pred_count']),axis=1))
-
-    # bigwig_helper.write_bigwig(
-    #                     data, 
-    #                     regions_array, 
-    #                     gs, 
-    #                     os.path.join(out_dir, "pred.bw"), 
-    #                     outstats_file=None, 
-    #                     debug_chr=None, 
-    #                     use_tqdm=True)
-
-    # save predictions into h5py file
-    # write_predictions_h5py(parsed_output['pred_profile_prob'], parsed_output['true_profile'], coords, out_dir)
-
-    # regions = pd.DataFrame(coords, columns=['chrom', 'summit', 'forward_reverse', 'is_peak'])
-    # regions['is_peak'] = regions['is_peak'].astype(int)
-    # regions['pred_count'] = parsed_output['pred_count']
-    # regions['true_count'] = parsed_output['true_count']
-    # regions.to_csv(os.path.join(out_dir, 'regions.csv'), sep='\t', index=False)
-
-    # print(peak_regions.head())
 
     metrics_dictionary={}
     metrics_dictionary["counts_metrics"] = {}

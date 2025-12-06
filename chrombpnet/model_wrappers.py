@@ -103,70 +103,7 @@ def _to_numpy(tensor: torch.Tensor) -> np.ndarray:
     return tensor.detach().cpu().numpy()
 
 
-def adjust_bias_model_logcounts(bias_model, dataloader, verbose=False, device=1):
-    """
-    Given a bias model, sequences and associated counts, the function adds a 
-    constant to the output of the bias_model's logcounts that minimises squared
-    error between predicted logcounts and observed logcounts (infered from 
-    cts). This simply reduces to adding the average difference between observed 
-    and predicted to the "bias" (constant additive term) of the Dense layer.
-    Typically the seqs and counts would correspond to training nonpeak regions.
-    ASSUMES model_bias's last layer is a dense layer that outputs logcounts. 
-    This would change if you change the model.
-    """
 
-    print("Adjusting bias model counts")
-    bias_model.eval()
-    delta = []
-    with torch.no_grad():
-        bias_model.to('cuda')
-        for batch in tqdm(dataloader):
-            batch = {k: v.to('cuda') if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-            _, pred_counts = bias_model(batch['onehot_seq'])
-            true_counts = batch['profile'].sum(dim=-1).log1p()
-            # _delta = out['true_count'].mean(-1) - out['pred_count'].mean(-1)
-            _delta = true_counts.mean(-1) - pred_counts.mean(-1)
-            delta.append(_delta)
-        delta = torch.cat(delta, dim=0).mean()
-        # bpnet_wrapper = BPNetWrapper(args)
-        # bpnet_wrapper.model = bias_model
-        # output = L.Trainer(logger=False, devices=device).predict(bpnet_wrapper, dataloader)
-        # parsed_output = {key: np.concatenate([batch[key] for batch in output]) for key in output[0]}
-        # delta = parsed_output['true_count'].mean(-1) - parsed_output['pred_count'].mean(-1)
-        # delta = torch.cat([predictions['delta'] for predictions in predictions], dim=0).mean()
-        
-        bias_model.linear.bias += torch.Tensor(delta).to(bias_model.linear.bias.device)
-        
-    if verbose:
-        print('### delta', delta, flush=True)
-    return bias_model
-
-def init_bias(bias, dataloader=None, verbose=False, device=1):
-        print(f"Loading bias model from {bias}")
-        bias_model = BPNet.from_keras(bias, name='bias')
-        bias_model.eval()  # Freeze the sub-model
-        for param in bias_model.parameters():
-            param.requires_grad = False
-
-        if dataloader is not None:
-            bias_model = adjust_bias_model_logcounts(bias_model, dataloader, verbose=verbose, device=device)
-        return bias_model
-
-def init_chrombpnet_wo_bias(chrombpnet_wo_bias, freeze=True):
-    print(f"Loading chrombpnet_wo_bias model from {chrombpnet_wo_bias}")
-    if chrombpnet_wo_bias.endswith('.h5'):
-        model = BPNet.from_keras(chrombpnet_wo_bias)
-    elif chrombpnet_wo_bias.endswith('.pt'):
-        model = BPNet(n_filters=512, n_layers=8)
-        model.load_state_dict(torch.load(chrombpnet_wo_bias, map_location='cpu'))
-    elif chrombpnet_wo_bias.endswith('.ckpt'):
-        model = BPNet.load_from_checkpoint(chrombpnet_wo_bias)
-    
-    if freeze:
-        for param in model.parameters():
-            param.requires_grad = False
-
-    return model
 
 class ControlWrapper(torch.nn.Module):
     """This wrapper automatically creates a control track of all zeroes.
@@ -311,11 +248,10 @@ class ModelWrapper(LightningModule):
     
     def __init__(
         self,
-        args,
         **kwargs
     ):
         """Initialize the model wrapper.
-        
+
         Args:
             model: The underlying model architecture
             learning_rate: Learning rate for optimization
@@ -327,18 +263,7 @@ class ModelWrapper(LightningModule):
             **kwargs: Additional arguments to be passed to the model
         """
 
-        
         super().__init__()
-        self.alpha = args.alpha
-        self.beta = args.beta
-        self.verbose = args.verbose
-        
-        self.metrics = {
-            'train': {'preds': [], 'targets': []},
-            'val': {'preds': [], 'targets': []},
-            'test': {'preds': [], 'targets': []},
-            'predict': {'preds': [], 'targets': []}
-        }
 
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -361,13 +286,6 @@ class ModelWrapper(LightningModule):
     def _step(self, batch, batch_idx, mode='train'):
         raise NotImplementedError("Subclasses must implement this method")
     
-    def init_bias(self, bias, dataloader=None, verbose=False, device=1):
-        # print(f"Loading bias model from {bias}")
-        return init_bias(bias, dataloader=dataloader, verbose=verbose, device=device)
-
-    def init_chrombpnet_wo_bias(self, chrombpnet_wo_bias, freeze=True):
-        # print(f"Initializing chrombpnet_wo_bias model from {chrombpnet_wo_bias}")
-        return init_chrombpnet_wo_bias(chrombpnet_wo_bias, freeze=freeze)
 
     def _predict_on_dataloader(self, dataloader, func, **kwargs):
         outs = []
@@ -436,7 +354,7 @@ class ModelWrapper(LightningModule):
         all_targets = torch.cat(self.metrics[mode]['targets']).reshape(-1)
         
         # Calculate and log correlation
-        pr = self._pearson_corr(all_preds, all_targets)
+        pr = pearson_corr(all_preds, all_targets)
         self.log(f"{mode}_count_pearson", pr, prog_bar=True, logger=True, sync_dist=True)
         
         # Reset metrics storage
@@ -458,49 +376,6 @@ class ModelWrapper(LightningModule):
     def configure_optimizers(self) -> Union[torch.optim.Optimizer, Dict[str, Any]]:
         raise NotImplementedError("Subclasses must implement this method")
     
-    @staticmethod
-    def _to_numpy(tensor: torch.Tensor) -> np.ndarray:
-        """Convert tensor to numpy array.
-        
-        Args:
-            tensor: Input tensor
-            
-        Returns:
-            Numpy array
-        """
-        return tensor.detach().cpu().numpy()
-    
-    @staticmethod
-    def _pearson_corr(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """Calculate Pearson correlation coefficient.
-        
-        Args:
-            x: First tensor
-            y: Second tensor
-            
-        Returns:
-            Pearson correlation coefficient
-        """
-        x_centered = x - x.mean(dim=-1, keepdim=True)
-        y_centered = y - y.mean(dim=-1, keepdim=True)
-        numerator = (x_centered * y_centered).sum(dim=-1)
-        denominator = torch.sqrt(
-            (x_centered ** 2).sum(dim=-1) * (y_centered ** 2).sum(dim=-1)
-        )
-        return numerator / denominator
-    
-    @staticmethod
-    def _multinomial_nll(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """Calculate multinomial negative log likelihood loss.
-        
-        Args:
-            pred: Predicted probabilities
-            target: Target probabilities
-            
-        Returns:
-            Loss value
-        """
-        return -torch.sum(target * torch.log(pred + 1e-10), dim=-1).mean() 
     
 
 
@@ -512,7 +387,18 @@ class BPNetWrapper(ModelWrapper):
     such as profile and count predictions, and appropriate loss calculations.
     """
     def __init__(self, args):
-        super().__init__(args)
+        super().__init__()
+        self.alpha = args.alpha
+        self.beta = args.beta
+        self.verbose = args.verbose
+        
+        self.metrics = {
+            'train': {'preds': [], 'targets': []},
+            'val': {'preds': [], 'targets': []},
+            'test': {'preds': [], 'targets': []},
+            'predict': {'preds': [], 'targets': []}
+        }
+
         self.model = BPNet(
                 out_dim=args.out_dim,
                 n_filters=args.n_filters, 
@@ -544,7 +430,6 @@ class BPNetWrapper(ModelWrapper):
         self.metrics[mode]['preds'].append(y_count)
         self.metrics[mode]['targets'].append(true_counts)
         with torch.no_grad():
-            # count_pearson = pearson_corr(y_count, true_counts).mean()
             profile_pearson = pearson_corr(y_profile.softmax(-1), true_profile).mean()
             self.log_dict({f"{mode}_profile_pearson": profile_pearson}, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
@@ -604,78 +489,117 @@ class ChromBPNetWrapper(BPNetWrapper):
         """
         super().__init__(args)
 
-        config = ChromBPNetConfig.from_argparse_args(args)
-        self.model = ChromBPNet(config)
-
-
-def create_model_wrapper(
-    args,
-    **kwargs
-) -> ModelWrapper:
-    """Factory function to create appropriate model wrapper.
-    
-    Args:
-        model_type: Type of model ('bpnet', 'chrombpnet')
-        config: Model configuration
-        **kwargs: Additional arguments to be passed to the wrapper
-        
-    Returns:
-        Appropriate model wrapper instance
-        
-    Raises:
-        ValueError: If model_type is not recognized
-    """
-    model_type = args.model_type.lower()
-    if model_type == 'bpnet':
-        return BPNetWrapper(args)
-    elif model_type == 'chrombpnet':
-        model_wrapper = ChromBPNetWrapper(args)
+        self.chrombpnet_wo_bias = self.model
         if args.bias_scaled:
-            model_wrapper.model.bias = model_wrapper.init_bias(args.bias_scaled)
-        if args.chrombpnet_wo_bias:
-            model_wrapper.model.model = model_wrapper.init_chrombpnet_wo_bias(args.chrombpnet_wo_bias, freeze=False)
-        return model_wrapper
-    else:
-        raise ValueError(f"Unknown model type: {model_type}") 
+            self.bias = init_bias(args.bias_scaled)
+        else:
+            self.bias = BPNet(out_dim=args.out_dim, n_layers=4, n_filters=128)
+
+        self._log = _Log()
+        self._exp1 = _Exp()
+        self._exp2 = _Exp()
+
+    def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+
+        """A forward pass through the network.
+
+        This function is usually accessed through calling the model, e.g.
+        doing `model(x)`. The method defines how inputs are transformed into
+        the outputs through interactions with each of the layers.
 
 
-def load_pretrained_model(args):
-    import os
-    checkpoint = args.checkpoint
-    if args.bias_scaled is None and os.path.exists(os.path.join(args.data_dir, 'bias_scaled.h5')):
-        args.bias_scaled = os.path.join(args.data_dir, 'bias_scaled.h5')
-    if checkpoint is not None:
-        if checkpoint.endswith('.ckpt'):
-            model_wrapper = ChromBPNetWrapper.load_from_checkpoint(checkpoint, map_location='cpu')
-            if args.bias_scaled:
-                model_wrapper.model.bias = model_wrapper.init_bias(args.bias_scaled)
-            else:
-                print(f"No bias model found")
-            return model_wrapper
-                
-        elif checkpoint.endswith('.pt'):
-            model_wrapper = ChromBPNetWrapper(args)
-            model_wrapper.model.model.load_state_dict(torch.load(checkpoint, map_location='cpu'))
-            if args.bias_scaled:
-                model_wrapper.model.bias = model_wrapper.init_bias(args.bias_scaled)
-            else:
-                print(f"No bias model found")
-            return model_wrapper
-        elif checkpoint.endswith('.h5'):  
-            model_wrapper = ChromBPNetWrapper(args)
-            # For Keras H5 files, load using the from_keras method
-            print(f"Loading chrombpnet_wo_bias model from {checkpoint}")
-            model_wrapper.model.model = BPNet.from_keras(checkpoint)
-            if args.bias_scaled:
-                print(f"Loading bias model from {args.bias_scaled}")
-                model_wrapper.model.bias = model_wrapper.init_bias(args.bias_scaled)
-            else:
-                print(f"No bias model found")
-            return model_wrapper
-    else:
-        model_wrapper = ChromBPNetWrapper(args)
+        Parameters
+        ----------
+        x: torch.tensor, shape=(-1, 4, 2114)
+            A one-hot encoded sequence tensor.
 
-    return model_wrapper
+        X_ctl: ignore
+            An ignored parameter for consistency with attribution functions.
+
+
+        Returns
+        -------
+        y_profile: torch.tensor, shape=(-1, 1000)
+            The predicted logit profile for each example. Note that this is not
+            a normalized value.
+        """
+        acc_profile, acc_counts = self.chrombpnet_wo_bias(x)
+        bias_profile, bias_counts = self.bias(x)
+
+        y_profile = acc_profile + bias_profile
+        y_counts = self._log(self._exp1(acc_counts) + self._exp2(bias_counts))
+        
+        # DO NOT SQUEEZE y_counts, as it is needed for running deep_lift_shap
+        return y_profile.squeeze(1), y_counts # N x out_dim, N x 1
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.chrombpnet_wo_bias.parameters(), lr=0.001, eps=1e-7)
+        return optimizer
+    
+
+def adjust_bias_model_logcounts(bias_model, dataloader, verbose=False, device=1):
+    """
+    Given a bias model, sequences and associated counts, the function adds a 
+    constant to the output of the bias_model's logcounts that minimises squared
+    error between predicted logcounts and observed logcounts (infered from 
+    cts). This simply reduces to adding the average difference between observed 
+    and predicted to the "bias" (constant additive term) of the Dense layer.
+    Typically the seqs and counts would correspond to training nonpeak regions.
+    ASSUMES model_bias's last layer is a dense layer that outputs logcounts. 
+    This would change if you change the model.
+    """
+
+    print("Adjusting bias model counts")
+    bias_model.eval()
+    delta = []
+    with torch.no_grad():
+        bias_model.to('cuda')
+        for batch in tqdm(dataloader):
+            batch = {k: v.to('cuda') if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+            _, pred_counts = bias_model(batch['onehot_seq'])
+            true_counts = batch['profile'].sum(dim=-1).log1p()
+            # _delta = out['true_count'].mean(-1) - out['pred_count'].mean(-1)
+            _delta = true_counts.mean(-1) - pred_counts.mean(-1)
+            delta.append(_delta)
+        delta = torch.cat(delta, dim=0).mean()
+        # bpnet_wrapper = BPNetWrapper(args)
+        # bpnet_wrapper.model = bias_model
+        # output = L.Trainer(logger=False, devices=device).predict(bpnet_wrapper, dataloader)
+        # parsed_output = {key: np.concatenate([batch[key] for batch in output]) for key in output[0]}
+        # delta = parsed_output['true_count'].mean(-1) - parsed_output['pred_count'].mean(-1)
+        # delta = torch.cat([predictions['delta'] for predictions in predictions], dim=0).mean()
+        
+        bias_model.linear.bias += torch.Tensor(delta).to(bias_model.linear.bias.device)
+        
+    if verbose:
+        print('### delta', delta, flush=True)
+    return bias_model
+
+def init_bias(bias, dataloader=None, verbose=False, device=1):
+        print(f"Loading bias model from {bias}")
+        bias_model = BPNet.from_keras(bias, name='bias')
+        bias_model.eval()  # Freeze the sub-model
+        for param in bias_model.parameters():
+            param.requires_grad = False
+
+        if dataloader is not None:
+            bias_model = adjust_bias_model_logcounts(bias_model, dataloader, verbose=verbose, device=device)
+        return bias_model
+
+def init_chrombpnet_wo_bias(chrombpnet_wo_bias, freeze=True):
+    print(f"Loading chrombpnet_wo_bias model from {chrombpnet_wo_bias}")
+    if chrombpnet_wo_bias.endswith('.h5'):
+        model = BPNet.from_keras(chrombpnet_wo_bias)
+    elif chrombpnet_wo_bias.endswith('.pt'):
+        model = BPNet(n_filters=512, n_layers=8)
+        model.load_state_dict(torch.load(chrombpnet_wo_bias, map_location='cpu'))
+    
+    if freeze:
+        for param in model.parameters():
+            param.requires_grad = False
+
+    return model
+
 
 if __name__ == '__main__':
 
@@ -684,7 +608,7 @@ if __name__ == '__main__':
     args.add_argument('--alpha', type=float, default=1.0)
     args = args.parse_args()
 
-    model_wrapper = create_model_wrapper(args.model_type, args)
+    model_wrapper = ChromBPNetWrapper(args)
     x = torch.randn(1, 4, 2114)
     batch = {
         'onehot_seq': x,

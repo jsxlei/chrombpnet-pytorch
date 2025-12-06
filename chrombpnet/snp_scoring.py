@@ -27,19 +27,10 @@ from chrombpnet.data_utils import dna_to_one_hot, read_chrom_sizes
 
 
 # ------------------------------------------------------------------------------------------------
-# load_model_wrapper
-# ------------------------------------------------------------------------------------------------
-def load_model_wrapper(model_path):
-    from chrombpnet.model_wrappers import init_chrombpnet_wo_bias
-    model = init_chrombpnet_wo_bias(model_path)
-    # model.to('cuda')
-    return model
-
-
-# ------------------------------------------------------------------------------------------------
 # main
 # ------------------------------------------------------------------------------------------------
 from chrombpnet.snp_utils import * 
+from chrombpnet.model_wrappers import init_chrombpnet_wo_bias
 
 def main():
     args = fetch_scoring_args()
@@ -55,7 +46,7 @@ def main():
         # raise OSError("Output directory does not exist")
 
     # load the model and variants
-    model = load_model_wrapper(args.model)
+    model = init_chrombpnet_wo_bias(args.model)
     variants_table = load_variant_table(args.list, args.schema)
     variants_table = variants_table.fillna('-')
     
@@ -68,11 +59,6 @@ def main():
         variants_table = variants_table.loc[variants_table['chr'] == args.chrom]
         print("Chromosome variants table shape:", variants_table.shape)
 
-    # infer input length
-    # if args.lite:
-    #     input_len = model.input_shape[0][1]
-    # else:
-    #     input_len = model.input_shape[1]
     input_len = 2114
 
     print("Input length inferred from the model:", input_len)

@@ -9,7 +9,10 @@ It handles the loading of genomic regions, their corresponding sequences, and va
 """
 
 from functools import cached_property
+import os
+from pathlib import Path
 from time import time
+import h5py
 
 # Third-party imports
 import torch
@@ -18,7 +21,7 @@ import pandas as pd
 import lightning as L
 
 
-from .data_utils import load_region_df, load_data, random_crop, crop_revcomp_augment, get_cts
+from chrombpnet.data_utils import load_region_df, load_data, random_crop, crop_revcomp_augment, get_cts
 
 
 class DataModule(L.LightningDataModule):
@@ -65,6 +68,11 @@ class DataModule(L.LightningDataModule):
         self._setup_chromosomes()
         self._split_data()
 
+        self.cached_dir = {}
+        self.cached_dir['train'] = os.path.join(config.cached_dir, f'fold_{config.fold}', 'train') if config.cached_dir else None
+        self.cached_dir['val'] = os.path.join(config.cached_dir, f'fold_{config.fold}', 'val') if config.cached_dir else None
+        self.cached_dir['test'] = os.path.join(config.cached_dir, f'fold_{config.fold}', 'test') if config.cached_dir else None
+
     def _load_regions(self):
         """Load peak and negative regions from files."""
         self.peaks = load_region_df(
@@ -110,6 +118,7 @@ class DataModule(L.LightningDataModule):
 
         config = self.config
 
+
         if stage == 'fit':
             train_peaks, train_nonpeaks = split_peak_and_nonpeak(self.train_data)
             val_peaks, val_nonpeaks = split_peak_and_nonpeak(self.val_data)
@@ -126,6 +135,8 @@ class DataModule(L.LightningDataModule):
                 add_revcomp=True,
                 return_coords=False, #return_coords,
                 shuffle_at_epoch_start=False, #shuffle_at_epoch_start
+                cached_dir=self.cached_dir['train'],
+                is_training=True,
             )
             self.val_dataset = self.dataset_class(
                 peak_regions=val_peaks,
@@ -139,6 +150,8 @@ class DataModule(L.LightningDataModule):
                 add_revcomp=False,
                 return_coords=False,
                 shuffle_at_epoch_start=False, 
+                cached_dir=self.cached_dir['val'],
+                is_training=False,
             )
         elif stage == 'test':
             test_peaks, test_nonpeaks = split_peak_and_nonpeak(self.test_data)
@@ -154,6 +167,8 @@ class DataModule(L.LightningDataModule):
                 add_revcomp=False,
                 return_coords=False,
                 shuffle_at_epoch_start=False, 
+                cached_dir=self.cached_dir['test'],
+                is_training=False
             )
 
         print(f'Data setup complete in {time() - t0:.2f} seconds')
@@ -229,18 +244,21 @@ class DataModule(L.LightningDataModule):
             batch_size=self.config.batch_size,
             shuffle=False,
             num_workers=self.config.num_workers,
-        ), dataset
+        )
 
 
     def chrom_dataset(self, chrom='chr1', negative_sampling_ratio=-1):
         if isinstance(chrom, str):
             if chrom in ['train', 'val', 'test']:
+                cached_dir = self.cached_dir[chrom]
                 chrom = getattr(self, f'{chrom}_chroms')
-                
             elif chrom == 'all':
+                cached_dir = self.config.cached_dir
                 chrom = self.chroms
             else:
+                cached_dir = self.config.cached_dir
                 chrom = [chrom]
+            # print(cached_dir, chrom)
 
         regions = self.data[self.data.iloc[:, 0].isin(chrom)].reset_index(drop=True)
         peaks, nonpeaks = split_peak_and_nonpeak(regions)
@@ -258,11 +276,10 @@ class DataModule(L.LightningDataModule):
             return_coords=False,
             shuffle_at_epoch_start=False,
             debug=self.config.debug,
+            cached_dir=cached_dir,
+            is_training=False,
         )
         return dataset
-
-
-
 
 
 def split_peak_and_nonpeak(data):
@@ -352,8 +369,7 @@ def crop_revcomp_data(
         seqs, cts, coords, inputlen, outputlen,
         add_revcomp, shuffle=shuffle
     )
-    # self.regions = pd.DataFrame(self.cur_coords, columns=['chrom', 'start', 'forward_or_reverse', 'is_peak'])
-    # print('Regions', self.regions['is_peak'].value_counts())
+
     return seqs, cts, coords
 
 
@@ -393,9 +409,9 @@ class ChromBPNetDataset(torch.utils.data.Dataset):
     
     def __init__(
             self, 
-            peak_regions, 
-            nonpeak_regions, 
-            genome_fasta, 
+            peak_regions=None, 
+            nonpeak_regions=None, 
+            genome_fasta=None, 
             inputlen=2114, 
             outputlen=1000, 
             max_jitter=0, 
@@ -405,6 +421,8 @@ class ChromBPNetDataset(torch.utils.data.Dataset):
             return_coords=False,    
             shuffle_at_epoch_start=False, 
             debug=False,
+            cached_dir=None,
+            is_training=False,
             **kwargs
     ):
         """Initialize the generator.
@@ -426,13 +444,49 @@ class ChromBPNetDataset(torch.utils.data.Dataset):
         """
         if debug:
             peak_regions = debug_subsample(peak_regions)
-            nonpeak_regions = debug_subsample(nonpeak_regions)
+            if nonpeak_regions is not None:
+                nonpeak_regions = debug_subsample(nonpeak_regions)
 
  
         # Load data
-        peak_seqs, peak_cts, peak_coords, nonpeak_seqs, nonpeak_cts, nonpeak_coords = load_data(
-            peak_regions, nonpeak_regions, genome_fasta, cts_bw_file, inputlen, outputlen, max_jitter
-        )
+        if cached_dir:
+            if not os.path.exists(cached_dir):
+                os.makedirs(cached_dir)
+            try:
+                with h5py.File(os.path.join(cached_dir, 'data.h5'), 'r') as hf:
+                    peak_seqs = hf['peak_seqs'][:]
+                    peak_cts = hf['peak_cts'][:]
+                    peak_coords = hf['peak_coords'][:]
+                    peak_regions = pd.read_csv(os.path.join(cached_dir, 'peak_regions.csv'))
+                    if nonpeak_regions is not None:
+                        nonpeak_seqs = hf['nonpeak_seqs'][:]
+                        nonpeak_cts = hf['nonpeak_cts'][:]
+                        nonpeak_coords = hf['nonpeak_coords'][:]
+                        nonpeak_regions = pd.read_csv(os.path.join(cached_dir, 'nonpeak_regions.csv'))
+                
+                data_loaded = True
+            except Exception as e:
+                data_loaded = False
+                peak_seqs, peak_cts, peak_coords, nonpeak_seqs, nonpeak_cts, nonpeak_coords = load_data(
+                    peak_regions, nonpeak_regions, genome_fasta, cts_bw_file, inputlen, outputlen, max_jitter
+                )
+                peak_regions.to_csv(os.path.join(cached_dir, 'peak_regions.csv'), index=False)
+                if nonpeak_regions is not None:
+                    nonpeak_regions.to_csv(os.path.join(cached_dir, 'nonpeak_regions.csv'), index=False)
+                with h5py.File(os.path.join(cached_dir, 'data.h5'), 'w') as hf:
+                    hf.create_dataset('peak_seqs', data=peak_seqs, compression="gzip")
+                    hf.create_dataset('peak_cts', data=peak_cts, compression="gzip")
+                    hf.create_dataset('peak_coords', data=peak_coords.astype('S'), compression="gzip")
+                    if nonpeak_regions is not None:
+                        hf.create_dataset('nonpeak_seqs', data=nonpeak_seqs, compression="gzip")
+                        hf.create_dataset('nonpeak_cts', data=nonpeak_cts, compression="gzip")
+                        hf.create_dataset('nonpeak_coords', data=nonpeak_coords.astype('S'), compression="gzip")
+            if not data_loaded:
+                print(f'Saved cached data to {cached_dir}')
+        else:
+            peak_seqs, peak_cts, peak_coords, nonpeak_seqs, nonpeak_cts, nonpeak_coords = load_data(
+                peak_regions, nonpeak_regions, genome_fasta, cts_bw_file, inputlen, outputlen, max_jitter
+            )
 
         # Store data
         self.peak_seqs, self.nonpeak_seqs = peak_seqs, nonpeak_seqs
@@ -449,13 +503,19 @@ class ChromBPNetDataset(torch.utils.data.Dataset):
         self.max_jitter = max_jitter
         self.genome_fasta = genome_fasta
         self.cts_bw_file = cts_bw_file
+        self.is_training = is_training
 
         if nonpeak_regions is not None:
             self.regions = pd.concat([peak_regions, nonpeak_regions], ignore_index=True)
         else:
             self.regions = peak_regions
         # Initialize data
-        self.crop_revcomp_data()
+        if is_training:
+            self.crop_revcomp_data()
+        else:
+            self.cur_seqs = np.vstack([peak_seqs, nonpeak_seqs]) if nonpeak_regions is not None else peak_seqs
+            self.cur_cts = np.vstack([peak_cts, nonpeak_cts]) if nonpeak_regions is not None else peak_cts
+            self.cur_coords = np.vstack([peak_coords, nonpeak_coords]) if nonpeak_regions is not None else nonpeak_regions
 
     def __len__(self):
         """Return the number of samples in the dataset."""
@@ -476,11 +536,6 @@ class ChromBPNetDataset(torch.utils.data.Dataset):
             self.inputlen, self.outputlen, self.add_revcomp, self.negative_sampling_ratio, self.shuffle_at_epoch_start
         )
 
-    def _get_adj(self):
-        """Get adjacency matrix for the data."""
-        pass
-
-
     def __getitem__(self, idx):
         """Get a sample from the dataset.
         
@@ -497,3 +552,25 @@ class ChromBPNetDataset(torch.utils.data.Dataset):
             'profile': self.cur_cts[idx].astype(np.float32),
         }
 
+
+
+if __name__ == '__main__':
+    from chrombpnet.data_config import DataConfig
+    import argparse
+    parser = argparse.ArgumentParser()
+    DataConfig.add_argparse_args(parser)
+    args = parser.parse_args()
+
+    config = DataConfig.from_argparse_args(args)
+    data_module = DataModule(config)
+    data_module.setup('fit')
+    train_loader = data_module.train_dataloader()
+    val_loader = data_module.val_dataloader()
+
+    for batch in train_loader:
+        print(batch['onehot_seq'].shape, batch['profile'].shape)
+        break
+
+    for batch in val_loader:
+        print(batch['onehot_seq'].shape, batch['profile'].shape)
+        break

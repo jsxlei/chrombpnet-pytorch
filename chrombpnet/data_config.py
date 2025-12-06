@@ -12,8 +12,8 @@ from typing import List, Optional, Dict, Any, Union, Tuple
 from argparse import ArgumentParser, Namespace
 import os
 import json
-from .parse_utils import add_argparse_args, from_argparse_args, parse_argparser, get_init_arguments_and_types
-from .genome import hg38, hg38_datasets, mm10, mm10_datasets
+from chrombpnet.parse_utils import add_argparse_args, from_argparse_args, parse_argparser, get_init_arguments_and_types
+from chrombpnet.genome import hg38, hg38_datasets, mm10, mm10_datasets
 
 
 class DataConfig:
@@ -29,9 +29,7 @@ class DataConfig:
             peaks: str = None, #'{}/peaks.bed',
             negatives: str = None, #'{}/negatives.bed', 
             bigwig: str = None, #'{}/unstranded.bw', 
-            # background: str = None,
             negative_sampling_ratio: float = 0.1,
-            saved_data: str = None,
             fasta: str = None,
             chrom_sizes: str = None,
             in_window: int = 2114,
@@ -40,17 +38,13 @@ class DataConfig:
             rc: float = 0.5,
             outlier_threshold: float = 0.999,
             data_type: str = 'profile',
-            # training_chroms: List = [
-            #     "chr2", "chr4", "chr5", "chr7", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14",
-            #     "chr15", "chr16", "chr17", "chr18", "chr19", "chr21", "chr22", "chrX", "chrY"],
-            # validation_chroms: List = ['chr8', 'chr20'],
-            # test_chroms: List = ["chr1", "chr3", "chr6"],
             exclude_chroms: list = [],
             fold: int = 0,
             genome: str = 'hg38',
             batch_size: int = 64,
             num_workers: int = 32,
             debug: bool = False,
+            cached_dir: str = None,
             **kwargs,
         ):
 
@@ -60,20 +54,16 @@ class DataConfig:
             self.peaks = peaks if peaks is not None else f'{data_dir}/peaks.bed'
             self.negatives = negatives if negatives is not None else f'{data_dir}/negatives.bed' if data_dir is not None else None 
             self.bigwig = bigwig if bigwig is not None else f'{data_dir}/unstranded.bw'
-            # self.background = background if background is not None else f'{data_dir}/background.bw'
-            self.negative_sampling_ratio = negative_sampling_ratio
-            self.saved_data = saved_data
             self.fasta = fasta if fasta is not None else _genome.fasta
             self.chrom_sizes = chrom_sizes if chrom_sizes is not None else _genome.chrom_sizes
             self.in_window = in_window
             self.out_window = out_window
             self.shift = shift
             self.rc = rc
+            self.negative_sampling_ratio = negative_sampling_ratio
             self.outlier_threshold = outlier_threshold
             self.data_type = data_type
-                # self.training_chroms = training_chroms
-                # self.validation_chroms = validation_chroms
-                # self.test_chroms = test_chroms
+            self.cached_dir = f'{data_dir}/cached_data/chrombpnet' if (data_dir is not None) and (cached_dir is None) else cached_dir
             self.exclude_chroms = exclude_chroms
             self.fold = fold
             self.batch_size = batch_size    
@@ -87,50 +77,6 @@ class DataConfig:
             self.validation_chroms = splits_dict['valid'] #if validation_chroms is None else validation_chroms
             self.test_chroms = splits_dict['test'] #if test_chroms is None else test_chroms
 
-    
-    def __post_init__(self):
-        """Validate configuration parameters after initialization."""
-        self._validate_paths()
-        self._validate_windows()
-        self._validate_chromosomes()
-        self._validate_data_type()
-    
-    def _validate_paths(self):
-        """Validate that all required files exist."""
-        required_files = {
-            'FASTA': self.fasta,
-            'BigWig': self.bigwig,
-            'Peaks': self.peaks
-        }
-        
-        for name, path in required_files.items():
-            if not os.path.exists(path):
-                raise FileNotFoundError(f"{name} file not found: {path}")
-    
-    def _validate_windows(self):
-        """Validate window size parameters."""
-        if self.in_window <= 0:
-            raise ValueError("Input window size must be positive")
-        if self.out_window <= 0:
-            raise ValueError("Output window size must be positive")
-        if self.in_window < self.out_window:
-            raise ValueError("Input window must be larger than output window")
-    
-    def _validate_chromosomes(self):
-        """Validate chromosome configuration."""
-        all_chroms = set(self.training_chroms + self.validation_chroms + self.test_chroms)
-        excluded = set(self.exclude_chroms)
-        
-        if not all_chroms:
-            raise ValueError("No chromosomes specified for training, validation, or testing")
-        
-        if excluded.intersection(all_chroms) != excluded:
-            raise ValueError("Some excluded chromosomes are not in the training/validation/test sets")
-    
-    def _validate_data_type(self):
-        """Validate data type parameter."""
-        if self.data_type not in ['profile', 'longrange']:
-            raise ValueError("Data type must be either 'profile' or 'longrange'")
         
     @classmethod
     def add_argparse_args(cls, parent_parser: ArgumentParser, **kwargs: Any):

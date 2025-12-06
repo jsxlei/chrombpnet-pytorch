@@ -249,7 +249,7 @@ def load_region_df(peak_bed, chrom_sizes=None, in_window=2114, shift=0, width=50
         filtered_df = df
     
     filtered_df.columns = ['chr', 'start', 'end', 'name', 'score', 'strand', 'signalValue', 'pValue', 'qValue', 'summit', 'is_peak']
-    filtered_df = format_region(filtered_df, width=500)
+    # filtered_df = format_region(filtered_df, width=500)
     return filtered_df.reset_index(drop=True) # Reset index to avoid index errors
 
 
