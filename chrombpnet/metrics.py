@@ -150,12 +150,14 @@ def compare_with_observed(regions, parsed_output, out_dir='./', tag='all_regions
     metrics_dictionary["counts_metrics"]["peaks_and_nonpeaks"]["mse"] = mse
 
     metrics_dictionary["profile_metrics"] = {}
-    mnll_pw, mnll_norm, jsd_pw, jsd_norm, jsd_rnd, jsd_rnd_norm, mnll_rnd, mnll_rnd_norm = profile_metrics(parsed_output['true_profile'], softmax(parsed_output['pred_profile']))
-    plot_histogram(jsd_pw, jsd_rnd, os.path.join(out_dir, 'all_regions_jsd'), '')
-    metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"] = {}
-    metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"]["median_jsd"] = np.nanmedian(jsd_pw)        
-    metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm)
-    
+    try:
+        mnll_pw, mnll_norm, jsd_pw, jsd_norm, jsd_rnd, jsd_rnd_norm, mnll_rnd, mnll_rnd_norm = profile_metrics(parsed_output['true_profile'], softmax(parsed_output['pred_profile']))
+        plot_histogram(jsd_pw, jsd_rnd, os.path.join(out_dir, 'all_regions_jsd'), '')
+        metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"] = {}
+        metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"]["median_jsd"] = np.nanmedian(jsd_pw)        
+        metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm)
+    except Exception as e:
+        print(f"Error in profile metrics for all regions: {e}")
 
     if 'is_peak' in regions.columns:
         peak_regions = regions[regions['is_peak']==1].copy()
@@ -169,11 +171,14 @@ def compare_with_observed(regions, parsed_output, out_dir='./', tag='all_regions
         metrics_dictionary["counts_metrics"]["peaks"]["pearsonr"] = pearson_cor
         metrics_dictionary["counts_metrics"]["peaks"]["mse"] = mse
 
-        mnll_pw, mnll_norm, jsd_pw, jsd_norm, jsd_rnd, jsd_rnd_norm, mnll_rnd, mnll_rnd_norm = profile_metrics(parsed_output['true_profile'][peak_index], softmax(parsed_output['pred_profile'])[peak_index])
-        plot_histogram(jsd_pw, jsd_rnd, os.path.join(out_dir, 'peaks_jsd'), '')
-        metrics_dictionary["profile_metrics"]["peaks"] = {}
-        metrics_dictionary["profile_metrics"]["peaks"]["median_jsd"] = np.nanmedian(jsd_pw)        
-        metrics_dictionary["profile_metrics"]["peaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm)
+        try:
+            mnll_pw, mnll_norm, jsd_pw, jsd_norm, jsd_rnd, jsd_rnd_norm, mnll_rnd, mnll_rnd_norm = profile_metrics(parsed_output['true_profile'][peak_index], softmax(parsed_output['pred_profile'])[peak_index])
+            plot_histogram(jsd_pw, jsd_rnd, os.path.join(out_dir, 'peaks_jsd'), '')
+            metrics_dictionary["profile_metrics"]["peaks"] = {}
+            metrics_dictionary["profile_metrics"]["peaks"]["median_jsd"] = np.nanmedian(jsd_pw)        
+            metrics_dictionary["profile_metrics"]["peaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm)
+        except Exception as e:
+            print(f"Error in profile metrics for peak regions: {e}")
 
         nonpeak_regions = regions[regions['is_peak']==0].copy()
         nonpeak_index = nonpeak_regions.index
@@ -186,12 +191,15 @@ def compare_with_observed(regions, parsed_output, out_dir='./', tag='all_regions
             metrics_dictionary["counts_metrics"]["nonpeaks"]["spearmanr"] = spearman_cor
             metrics_dictionary["counts_metrics"]["nonpeaks"]["pearsonr"] = pearson_cor
             metrics_dictionary["counts_metrics"]["nonpeaks"]["mse"] = mse
-            mnll_pw, mnll_norm, jsd_pw, jsd_norm, jsd_rnd, jsd_rnd_norm, mnll_rnd, mnll_rnd_norm = profile_metrics(parsed_output['true_profile'][nonpeak_index], softmax(parsed_output['pred_profile'])[nonpeak_index])
-            plot_histogram(jsd_pw, jsd_rnd, os.path.join(out_dir, 'nonpeaks_jsd'), '')
-            metrics_dictionary["profile_metrics"]["nonpeaks"] = {}
-            metrics_dictionary["profile_metrics"]["nonpeaks"]["median_jsd"] = np.nanmedian(jsd_pw)        
-            metrics_dictionary["profile_metrics"]["nonpeaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm)
 
+            try:
+                mnll_pw, mnll_norm, jsd_pw, jsd_norm, jsd_rnd, jsd_rnd_norm, mnll_rnd, mnll_rnd_norm = profile_metrics(parsed_output['true_profile'][nonpeak_index], softmax(parsed_output['pred_profile'])[nonpeak_index])
+                plot_histogram(jsd_pw, jsd_rnd, os.path.join(out_dir, 'nonpeaks_jsd'), '')
+                metrics_dictionary["profile_metrics"]["nonpeaks"] = {}
+                metrics_dictionary["profile_metrics"]["nonpeaks"]["median_jsd"] = np.nanmedian(jsd_pw)        
+                metrics_dictionary["profile_metrics"]["nonpeaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm)
+            except Exception as e:
+                print(f"Error in profile metrics for nonpeak regions: {e}")
     print(json.dumps(metrics_dictionary, indent=4, default=lambda o: float(o)))
 
     # os.makedirs(out_dir, exist_ok=True)
