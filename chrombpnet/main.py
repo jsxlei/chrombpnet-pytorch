@@ -127,6 +127,9 @@ def get_parser() -> argparse.ArgumentParser:
     predict_bias_parser = subparsers.add_parser('predict_bias', help='Predict bias with the ChromBPNet model.')
     add_common_args(predict_bias_parser)
 
+    predict_wo_bias_parser = subparsers.add_parser('predict_wo_bias', help='Predict with ChromBPNet model without bias.')
+    add_common_args(predict_wo_bias_parser)
+
     add_common_args(parser)
 
     parser.set_defaults(command='pipeline')
@@ -411,6 +414,12 @@ def main():
         print('bias_scaled', args.bias_scaled)
         print('bpnet_bias_wrapper', bpnet_bias_wrapper.model)
         predict(args, bpnet_bias_wrapper, mode='predict_bias')
+    elif args.command == 'predict_wo_bias':
+        from chrombpnet.model_wrappers import BPNetWrapper
+        model_wrapper = load_model(args)
+        bpnet_wrapper = BPNetWrapper(args)
+        bpnet_wrapper.model = model_wrapper.chrombpnet_wo_bias
+        predict(args, bpnet_wrapper, mode='predict_wo_bias')
 
     else:
         raise ValueError(f'Invalid command: {args.command}')
