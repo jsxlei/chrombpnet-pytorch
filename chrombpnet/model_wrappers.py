@@ -423,7 +423,7 @@ class BPNetWrapper(ModelWrapper):
             return {
                 'pred_count': _to_numpy(y_count),
                 'true_count': _to_numpy(true_counts),
-                'pred_profile': _to_numpy(y_profile), #.softmax(-1)),
+                'pred_profile': _to_numpy(y_profile.squeeze(1)), #.softmax(-1)),
                 'true_profile': _to_numpy(true_profile),
             }
 

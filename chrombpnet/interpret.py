@@ -267,15 +267,15 @@ def run_modisco_and_shap(
 		meme_file=MEME_FILE, 
 		max_seqlets=1000_000, 
 		width=500, 
+		n_control_tracks=0,
 		device='cuda',
 		debug=False
 	):
-	# if debug:
-		# out_dir = os.path.join(out_dir, 'debug')
+
 	print("Modisco output directory:", out_dir)
 	out_dir = os.path.join(out_dir, task)
 	os.makedirs(out_dir, exist_ok=True)
-	n_control_tracks = model.n_control_tracks
+
 	if debug:
 		sub_sample = 30_000
 		max_seqlets = 50_000
@@ -292,13 +292,9 @@ def run_modisco_and_shap(
 	if sub_sample is not None and len(regions_df) > sub_sample:
 		regions_df = regions_df.sample(sub_sample, random_state=42).reset_index(drop=True)
 	print('Number of peaks:', len(regions_df))
+	print('Device:', device)
 
 	seq = get_seq(regions_df, pyfaidx.Fasta(fasta), in_window)
-	# seq = extract_loci(regions_df, fasta, in_window, out='onehot', shift=0, pool_size=64)
-	# mask = (seq == 0.25).any(dim=2).any(dim=1)
-	# seq = seq[~mask]
-	# regions_df = regions_df[pd.Series(~mask)]
-
 
 	if n_control_tracks > 0:
 		args = [torch.zeros(seq.shape[0], n_control_tracks, out_window)]
@@ -310,11 +306,7 @@ def run_modisco_and_shap(
 	if seq.shape[-1] == 4:
 		seq = seq.permute(0, 2, 1)
 
-			# print(i, seq[i]); import pdb; pdb.set_trace()
-			# _validate_input(X, "X", shape=(-1, -1, -1), ohe=True, ohe_dim=1)
-		# seq[i]
-	## Mask those N values encoded as [0.25, 0.25, 0.25, 0.25]
-	mask = (seq == 0.25).any(dim=(1, 2))
+	mask = (seq == 0.25).any(dim=(1, 2)) 
 	seq = seq[~mask]
 	regions_df = regions_df[pd.Series(~mask)]
 
@@ -330,7 +322,7 @@ def run_modisco_and_shap(
 			print(i)
 			import pdb; pdb.set_trace()
 
-	attr = _deep_lift_shap(model, seq, batch_size=batch_size, verbose=True, args=args, warning_threshold=1e8, device=device)
+	attr = _deep_lift_shap(model.to(device), seq, batch_size=batch_size, verbose=True, args=args, warning_threshold=1e8, device=device)
 	# attr = _captum_deep_lift_shap(model, seq, batch_size=batch_size, verbose=True)
 	del model
 
