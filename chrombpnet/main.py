@@ -409,8 +409,12 @@ def main():
         reproduce(args)
     elif args.command == 'predict_bias':
         from chrombpnet.model_wrappers import BPNetWrapper
+        args.n_layers = 4
+        args.n_filters = 64
         bpnet_bias_wrapper = BPNetWrapper(args)
-        bpnet_bias_wrapper.model = bpnet_bias_wrapper.init_bias(args.bias_scaled)
+        if args.bias_scaled is None:
+            args.bias_scaled = os.path.join(args.data_dir, f'models/fold_{args.fold}/bias_scaled.h5')
+        bpnet_bias_wrapper.model = init_bias(args.bias_scaled)
         print('bias_scaled', args.bias_scaled)
         print('bpnet_bias_wrapper', bpnet_bias_wrapper.model)
         predict(args, bpnet_bias_wrapper, mode='predict_bias')
