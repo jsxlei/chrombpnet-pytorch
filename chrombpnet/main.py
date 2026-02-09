@@ -226,6 +226,7 @@ def train(args):
     )
     trainer.fit(model_wrapper, datamodule)
     if args.model_type == 'chrombpnet' and not args.fast_dev_run:
+        model_wrapper = load_model(args)  # reload the best model to get the chrombpnet_wo_bias
         torch.save(model_wrapper.model.state_dict(), os.path.join(out_dir, 'checkpoints/chrombpnet_wo_bias.pt'))
 
 def finetune(args):
