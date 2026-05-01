@@ -7,12 +7,12 @@ import torch.nn.functional as F
 # adapted from BPNet in bpnet-lite, credit goes to Jacob Schreiber <jmschreiber91@gmail.com>
 
 
-class _Log(nn.Module):
+class _Log1p(nn.Module):
     def __init__(self):
-        super(_Log, self).__init__()
+        super(_Log1p, self).__init__()
 
     def forward(self, X):
-        return torch.log(X)
+        return torch.log1p(X)
 
 
 class BPNet(torch.nn.Module):
@@ -157,7 +157,7 @@ class BPNet(torch.nn.Module):
         n_count_control = 1 if n_control_tracks > 0 else 0
         self.global_avg_pool = torch.nn.AdaptiveAvgPool1d(1)
         if n_control_tracks > 0:
-            self.log = _Log()
+            self.log = _Log1p()
         self.linear = torch.nn.Linear(n_filters+n_count_control, 1,
             bias=count_output_bias)
         
