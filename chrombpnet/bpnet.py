@@ -7,6 +7,14 @@ import torch.nn.functional as F
 # adapted from BPNet in bpnet-lite, credit goes to Jacob Schreiber <jmschreiber91@gmail.com>
 
 
+class _Log(nn.Module):
+    def __init__(self):
+        super(_Log, self).__init__()
+
+    def forward(self, X):
+        return torch.log(X)
+
+
 class BPNet(torch.nn.Module):
     """A basic BPNet model with stranded profile and total count prediction.
 
@@ -148,7 +156,9 @@ class BPNet(torch.nn.Module):
         # count prediction
         n_count_control = 1 if n_control_tracks > 0 else 0
         self.global_avg_pool = torch.nn.AdaptiveAvgPool1d(1)
-        self.linear = torch.nn.Linear(n_filters+n_count_control, 1, 
+        if n_control_tracks > 0:
+            self.log = _Log()
+        self.linear = torch.nn.Linear(n_filters+n_count_control, 1,
             bias=count_output_bias)
         
         self.tf_style_reinit()
@@ -250,7 +260,7 @@ class BPNet(torch.nn.Module):
         pred_count = self.global_avg_pool(x).squeeze(-1)
         if x_ctl is not None:
             x_ctl = torch.sum(x_ctl, dim=(1, 2)).unsqueeze(-1)
-            pred_count = torch.cat([pred_count, torch.log1p(x_ctl)], dim=-1)
+            pred_count = torch.cat([pred_count, self.log(x_ctl)], dim=-1)
         pred_count = self.linear(pred_count)
         return pred_count
     
